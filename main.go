@@ -1,85 +1,27 @@
 package main
 
 import (
-    "encoding/json"
-    "fmt"
-    "log"
-    "net/http"
-    "os"
-    "time"
+	"log"
 
-    "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	"GriBotTimeLev/internal/config"
+	"GriBotTimeLev/internal/time"
 )
 
 func main() {
-    botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-    if botToken == "" {
-        log.Fatal("TELEGRAM_BOT_TOKEN environment variable required")
-    }
+	// Инициализация бота
+	bot, err := tgbotapi.NewBotAPI(config.BotToken)
+	if err != nil {
+		log.Fatalf("Ошибка при создании бота: %v", err)
+	}
 
-    bot, err := tgbotapi.NewBotAPI(botToken)
-    if err != nil {
-        log.Panic(err)
-    }
+	bot.Debug = true // включить режим отладки, если нужно
+	log.Println("Запуск GriBotTimeLev...")
 
-    bot.Debug = true
-    log.Printf("Authorized on account %s", bot.Self.UserName)
+	// Запуск функции напоминания о времени в отдельной горутине
+	go time.StartTimeReminder(bot)
 
-    reminderChan := make(chan string)
-
-    go func() {
-        for {
-            time.Sleep(4 * time.Hour)
-            currentTime, err := getCurrentTime()
-            if err != nil {
-                log.Println("Failed to get current time:", err)
-                reminderChan <- "Напоминание: проверьте свое расписание!"
-            } else {
-                reminderChan <- fmt.Sprintf("Напоминание: текущее время %s. Проверьте свое расписание!", currentTime)
-            }
-        }
-    }()
-
-    go func() {
-        for reminder := range reminderChan {
-            msg := tgbotapi.NewMessage(123456789, reminder) // Замените 123456789 на ваш Telegram user ID
-            if _, err := bot.Send(msg); err != nil {
-                log.Println("Failed to send reminder:", err)
-            }
-        }
-    }()
-
-    u := tgbotapi.NewUpdate(0)
-    u.Timeout = 60
-
-    updates := bot.GetUpdatesChan(u)
-
-    for update := range updates {
-        if update.Message != nil && update.Message.Text == "/start" {
-            msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Добро пожаловать в Рычаг времени! Напоминания будут отправляться каждые 4 часа.")
-            if _, err := bot.Send(msg); err != nil {
-                log.Println("Failed to send message:", err)
-            }
-        }
-    }
-}
-
-// getCurrentTime запрашивает текущее время через API и возвращает его в виде строки
-func getCurrentTime() (string, error) {
-    resp, err := http.Get("http://worldtimeapi.org/api/timezone/Etc/UTC")
-    if err != nil {
-        return "", err
-    }
-    defer resp.Body.Close()
-
-    var data struct {
-        Datetime string `json:"datetime"`
-    }
-
-    if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-        return "", err
-    }
-
-    return data.Datetime, nil
+	// Основной цикл для обработки команд бота, если это понадобится в будущем
+	select {} // Используем select{} чтобы оставить бота в запущенном состоянии
 }
 
